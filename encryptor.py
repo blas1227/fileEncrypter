@@ -32,23 +32,68 @@ class Encrypter:
 		self.tmpPath = os.environ['TMP']
 
 
+	def __encryptIt(self, key, file=None):
+		if not file:
+			file = self.path
+		else:
+			file = os.path.join(self.path, file)
+		"""
+		# create random numbers in order to put both user key  and encrypted key in different places into encrypted document
+		# trying avoid any hack attack 
+		"""
+		fileLong = self.__returnLinesNumber(file)
+		keyLine = random.randint(0, fileLong)
+		alreadyEncryptedKeyLine = random.randint(0, fileLong)
+		cLine = 0
+		tmpFile = os.path.join(self.tmpPath, self.__getFileName(file))
+		# read file
+		with open(file, 'rb') as fd, open(tmpFile, 'wb') as tempFile:
+			for line in fd:
+				if cLine == keyLine:
+					tempFile.write(base64.b64encode(key.encode()) + b'\n')
+				if cLine == alreadyEncryptedKeyLine:
+					tempFile.write(base64.b64encode(ENCRYPT_FLAG.encode()) + b'\n')
+				tempFile.write(base64.b64encode(line) + b'\n')
+
+		return self.__copyFile(tmpFile, file)
+
+
+	def __desencryptIt(self, key, file=None):
+		if not file:
+			file = self.path
+		else:
+			file = os.path.join(self.path, file)
+		tmpFile = os.path.join(self.tmpPath, self.__getFileName(file))
+		keyEncoded = base64.b64encode(key.encode())
+		encryptedKeyEncoded = base64.b64encode(ENCRYPT_FLAG.encode())
+		with open(file, 'rb') as fd, open(tmpFile, 'wb') as tempFile:
+			for line in fd:
+				if not line == keyEncoded + b'\n' and not line == encryptedKeyEncoded + b'\n':
+					tempFile.write(base64.b64decode(line))
+		return self.__copyFile(tmpFile, file)
+
+
 	def __isFile(self):
 		return os.path.isfile(self.path)
 
-	
-	def __returnLinesNumber(self):
+
+	def __isDir(self):
+		return os.path.isdir(self.path)
+
+
+	def __returnLinesNumber(self, file):
 		try:
-			with open(self.path, 'rb') as file:
+			with open(file, 'rb') as fd:
 				count = 0 
-				for i in file:
+				for i in fd:
 					count +=1
 				return count
 		except IOError:
 			return -1
 	
 
-	def __getFileName(self):
-		return self.path.split('\\')[-1]
+	def __getFileName(self, file):
+		return file.split('\\')[-1]
 
 	
 	def __copyFile(self, source, dest):
@@ -60,46 +105,29 @@ class Encrypter:
 			return False
 
 
-
 	def encrypt(self, key):
-		tmpFile = os.path.join(self.tmpPath, self.__getFileName())
 		try:
 			if self.__isFile():
-				"""
-				# create random numbers in order to put both user key  and encrypted key in different places into encrypted document
-				# trying avoid any hack attack 
-				"""
-				fileLong = self.__returnLinesNumber()
-				keyLine = random.randint(0, fileLong)
-				alreadyEncryptedKeyLine = random.randint(0, fileLong)
-				cLine = 0 
-				# read file
-				with open(self.path, 'rb') as fd, open(tmpFile, 'wb') as file:
-					for line in fd:
-						if cLine == keyLine:
-							file.write(base64.b64encode(key.encode()) + b'\n')
-						if cLine == alreadyEncryptedKeyLine:
-							file.write(base64.b64encode(ENCRYPT_FLAG.encode()) + b'\n')
-						file.write(base64.b64encode(line) + b'\n')
-
-			return self.__copyFile(tmpFile, self.path)
+				return self.__encryptIt(key)
+			elif self.__isDir():
+				for element in os.listdir(self.path):
+					if not self.__encryptIt(key, file=element):
+						return False
+				return True
 		except IOError:
 			print('Error opening file')
 			return False
 
-	
+
 	def desencript(self, key):
-		tmpFile = os.path.join(self.tmpPath, self.__getFileName())
-		keyEncoded = base64.b64encode(key.encode())
-		encryptedKeyEncoded = base64.b64encode(ENCRYPT_FLAG.encode())
 		try:
 			if self.__isFile():
-				with open(self.path, 'rb') as fd, open(tmpFile, 'wb') as file:
-					for line in fd:
-						if not line == keyEncoded + b'\n' and not line == encryptedKeyEncoded + b'\n':
-							file.write(base64.b64decode(line))
-				return self.__copyFile(tmpFile, self.path)
-
+				return self.__desencryptIt(key)
+			elif self.__isDir():
+				for element in os.listdir(self.path):
+					if not self.__desencryptIt(key, file=element):
+						return False
+			return True
 		except IOError:
 			print('Error opening file')
 			return False
