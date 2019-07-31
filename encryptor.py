@@ -37,25 +37,30 @@ class Encrypter:
 			file = self.path
 		else:
 			file = os.path.join(self.path, file)
-		"""
-		# create random numbers in order to put both user key  and encrypted key in different places into encrypted document
-		# trying avoid any hack attack 
-		"""
-		fileLong = self.__returnLinesNumber(file)
-		keyLine = random.randint(0, fileLong)
-		alreadyEncryptedKeyLine = random.randint(0, fileLong)
-		cLine = 0
-		tmpFile = os.path.join(self.tmpPath, self.__getFileName(file))
-		# read file
-		with open(file, 'rb') as fd, open(tmpFile, 'wb') as tempFile:
-			for line in fd:
-				if cLine == keyLine:
-					tempFile.write(base64.b64encode(key.encode()) + b'\n')
-				if cLine == alreadyEncryptedKeyLine:
-					tempFile.write(base64.b64encode(ENCRYPT_FLAG.encode()) + b'\n')
-				tempFile.write(base64.b64encode(line) + b'\n')
+		if not self.__isEncrypted(file):
+			"""
+			# create random numbers in order to put both user key  and encrypted key in different places into encrypted document
+			# trying avoid any hack attack 
+			"""
+			fileLong = self.__returnLinesNumber(file)
+			keyLine = random.randint(0, fileLong)
+			alreadyEncryptedKeyLine = random.randint(0, fileLong)
+			cLine = 0
+			tmpFile = os.path.join(self.tmpPath, self.__getFileName(file))
+			# read file
+			with open(file, 'rb') as fd, open(tmpFile, 'wb') as tempFile:
+				# Writes default encrypted key in the beginning of file in order to identify whether or not is encrypted
+				tempFile.write(base64.b64encode(ENCRYPT_FLAG.encode()) + b'\n')
+				for line in fd:
+					if cLine == keyLine:
+						tempFile.write(base64.b64encode(key.encode()) + b'\n')
+					tempFile.write(base64.b64encode(line) + b'\n')
+					cLine += 1
 
-		return self.__copyFile(tmpFile, file)
+			return self.__copyFile(tmpFile, file)
+		else:
+			print('file its already encrypted using this module')
+			return False
 
 
 	def __desencryptIt(self, key, file=None):
@@ -63,14 +68,22 @@ class Encrypter:
 			file = self.path
 		else:
 			file = os.path.join(self.path, file)
-		tmpFile = os.path.join(self.tmpPath, self.__getFileName(file))
-		keyEncoded = base64.b64encode(key.encode())
-		encryptedKeyEncoded = base64.b64encode(ENCRYPT_FLAG.encode())
-		with open(file, 'rb') as fd, open(tmpFile, 'wb') as tempFile:
-			for line in fd:
-				if not line == keyEncoded + b'\n' and not line == encryptedKeyEncoded + b'\n':
-					tempFile.write(base64.b64decode(line))
-		return self.__copyFile(tmpFile, file)
+		if self.__isEncrypted(file):
+			tmpFile = os.path.join(self.tmpPath, self.__getFileName(file))
+			keyEncoded = base64.b64encode(key.encode())
+			encryptedKeyEncoded = base64.b64encode(ENCRYPT_FLAG.encode())
+			if self.__isRightKey(file, key):
+				with open(file, 'rb') as fd, open(tmpFile, 'wb') as tempFile:
+					for line in fd:
+						if not line == keyEncoded + b'\n' and not line == encryptedKeyEncoded + b'\n':
+							tempFile.write(base64.b64decode(line))
+				return self.__copyFile(tmpFile, file)
+			else:
+				print('Key inserted its not correct')
+				return False
+		else:
+			print('This file its not encrypted or not was encrypted using this module')
+			return False
 
 
 	def __isFile(self):
@@ -102,6 +115,26 @@ class Encrypter:
 			os.remove(source)
 			return True
 		except IOError:
+			return False
+
+
+	""" Returns True if the file was encrypted using this module otherwise return False """
+	def __isEncrypted(self, file):
+		try:
+			with open(file, 'rb') as fd:
+				firstLine = fd.readline()
+				return True if base64.b64decode(firstLine) == ENCRYPT_FLAG.encode() else False
+		except base64.binascii.Error:
+			""" This exception occurrs when module is trying to decode a file not encrypted """
+			return False
+
+
+	""" Returns True if the key inserted is correct otherwise return False """
+	def __isRightKey(self, file, key):
+		with open(file, 'rb') as fd:
+			for line in fd:
+				if base64.b64decode(line) == key.encode():
+					return True
 			return False
 
 
